@@ -1,54 +1,194 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Flask AI Demo</title>
+  <meta charset="UTF-8">
+  <title>🚀 Simple Creative AI Demo (Flask)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <style>
-    body { font-family: Arial, sans-serif; max-width: 950px; margin: 24px auto; padding: 12px; }
-    section { border: 1px solid #ddd; padding: 12px; margin-bottom: 14px; border-radius: 8px; }
-    textarea { width: 100%; }
-    input[type="file"] { display:block; margin-top:6px; margin-bottom:8px; }
-    button { padding:6px 12px; }
+    body { padding: 30px; background: #f7f9fc; }
+    .tab-content { margin-top: 20px; }
+    .card { padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(18,38,63,0.06); }
+    img.result-img { max-width: 100%; height: auto; border: 1px solid #e9ecef; padding: 6px; border-radius: 8px; }
+    .small-note { font-size: .9rem; color: #6c757d; }
   </style>
 </head>
 <body>
-  <h1>Simple Creative AI Demo (Flask)</h1>
-  <p>Pick a feature below — upload images / enter kernel / text and click the button.</p>
+  <div class="container">
+    <h1 class="mb-2 text-center">🚀 Simple Creative AI Demo (Flask)</h1>
+    <p class="text-center text-muted mb-4">Pick a feature below — upload images / enter kernel / text and see the results.</p>
 
-  <section>
-    <h2>Image Filter Demo — custom 3×3 kernel</h2>
-    <form action="/convolve" method="post" enctype="multipart/form-data">
-      <label>Image: <input type="file" name="image" accept="image/*" required></label>
-      <label>3×3 kernel (9 numbers, space/comma separated):</label>
-      <textarea name="kernel" rows="2">0 -1 0 -1 5 -1 0 -1 0</textarea>
-      <p><small>Example: sharpen kernel above.</small></p>
-      <button type="submit">Apply Kernel & show gradients</button>
-    </form>
-  </section>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mb-3">
+          {% for m in messages %}
+            <div class="alert alert-warning">{{ m }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
 
-  <section>
-    <h2>Upload 4–5 images → mean image and blended results</h2>
-    <form action="/mean" method="post" enctype="multipart/form-data">
-      <label>Select multiple images (up to 5): <input type="file" name="images" accept="image/*" multiple required></label>
-      <p><small>All images will be resized to the smallest width/height among uploaded images before averaging.</small></p>
-      <button type="submit">Compute Mean & Blends</button>
-    </form>
-  </section>
+    <!-- Nav Tabs -->
+    <ul class="nav nav-tabs" id="aiTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'filter' %}active{% endif %}" id="filter-tab" data-bs-toggle="tab" data-bs-target="#filter" type="button" role="tab">
+          🖼️ Image Filter
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'mean' %}active{% endif %}" id="mean-tab" data-bs-toggle="tab" data-bs-target="#mean" type="button" role="tab">
+          📷 Mean Image
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'onehot' %}active{% endif %}" id="onehot-tab" data-bs-toggle="tab" data-bs-target="#onehot" type="button" role="tab">
+          🔡 One-Hot Vectors
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'tokens' %}active{% endif %}" id="tokens-tab" data-bs-toggle="tab" data-bs-target="#tokens" type="button" role="tab">
+          ✍️ Token Counter
+        </button>
+      </li>
+    </ul>
 
-  <section>
-    <h2>Words → One-hot</h2>
-    <form action="/onehot" method="post">
-      <textarea name="words" rows="3" placeholder="enter words separated by spaces or commas">hello world demo test</textarea><br>
-      <button type="submit">Make One-hot & download CSV</button>
-    </form>
-  </section>
+    <!-- Tab Contents -->
+    <div class="tab-content">
+      
+      <!-- Image Filter Tab -->
+      <div class="tab-pane fade {% if active_tab == 'filter' %}show active{% endif %}" id="filter" role="tabpanel">
+        <div class="card">
+          <h3>Image Filter Demo — custom 3×3 kernel</h3>
+          <form method="post" enctype="multipart/form-data" action="/filter">
+            <div class="mb-3">
+              <label class="form-label">Upload Image:</label>
+              <input class="form-control" type="file" name="file" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">3×3 Kernel (9 numbers, space/comma separated):</label>
+              <textarea class="form-control" name="kernel" rows="2">0 -1 0 -1 5 -1 0 -1 0</textarea>
+              <div class="form-text">Example: sharpen kernel above.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">Apply Kernel & Show Gradients</button>
+          </form>
 
-  <section>
-    <h2>Token length checker</h2>
-    <form action="/tokens" method="post">
-      <textarea name="paragraph" rows="4" placeholder="Paste paragraph here..."></textarea><br>
-      <button type="submit">Count tokens (split by spaces)</button>
-    </form>
-  </section>
+          {% if filter_results %}
+            <hr>
+            <h5>Results</h5>
+            {% if filter_results.params %}
+              <p class="small-note">Summary: 
+                kernel={{ filter_results.params.kernel_shape }}, 
+                params={{ filter_results.params.kernel_params }}, 
+                image={{ filter_results.params.image_shape }}
+              </p>
+            {% endif %}
+            <div class="row mt-2">
+              {% for img in filter_results.images %}
+                <div class="col-md-4 mb-3 text-center">
+                  <img src="{{ url_for('send_result', filename=img) }}" class="result-img" alt="{{ img }}">
+                  <div class="mt-2">
+                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('send_result', filename=img) }}" download>Download</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Mean Image Tab -->
+      <div class="tab-pane fade {% if active_tab == 'mean' %}show active{% endif %}" id="mean" role="tabpanel">
+        <div class="card">
+          <h3>Upload 4–5 Images → Mean Image and Blended Results</h3>
+          <form method="post" enctype="multipart/form-data" action="/mean">
+            <div class="mb-3">
+              <label class="form-label">Select Multiple Images (up to 5):</label>
+              <input class="form-control" type="file" name="files" multiple required>
+            </div>
+            <button class="btn btn-success" type="submit">Compute Mean & Blends</button>
+          </form>
+
+          {% if mean_results %}
+            <hr>
+            <h5>Results</h5>
+            {% if mean_results.params %}
+              <p class="small-note">Processed {{ mean_results.params.num_images }} images — mean shape {{ mean_results.params.mean_shape }}</p>
+            {% endif %}
+            <div class="row mt-2">
+              {% for img in mean_results.images %}
+                <div class="col-md-4 mb-3 text-center">
+                  <img src="{{ url_for('send_result', filename=img) }}" class="result-img" alt="{{ img }}">
+                  <div class="mt-2">
+                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('send_result', filename=img) }}" download>Download</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- One-Hot Tab -->
+      <div class="tab-pane fade {% if active_tab == 'onehot' %}show active{% endif %}" id="onehot" role="tabpanel">
+        <div class="card">
+          <h3>Word → One-Hot Vectors</h3>
+          <form method="post" action="/onehot">
+            <div class="mb-3">
+              <label class="form-label">Enter words (space separated):</label>
+              <input class="form-control" type="text" name="words" placeholder="cat dog fish" required>
+            </div>
+            <button class="btn btn-warning" type="submit">Convert to One-Hot</button>
+          </form>
+
+          {% if onehot_results %}
+            <hr>
+            <h5>Vocabulary ({{ onehot_results.vocab|length }})</h5>
+            <p>{{ onehot_results.vocab|join(', ') }}</p>
+
+            <div class="mb-3">
+              <a class="btn btn-sm btn-success" href="{{ url_for('send_result', filename=onehot_results.csv) }}" download>Download CSV</a>
+            </div>
+
+            <h6>One-hot matrix</h6>
+            <div class="table-responsive">
+              <table class="table table-bordered">
+                <tr><th>token</th>{% for v in onehot_results.vocab %}<th>{{ v }}</th>{% endfor %}</tr>
+                {% for i in range(onehot_results.tokens|length) %}
+                  <tr>
+                    <td>{{ onehot_results.tokens[i] }}</td>
+                    {% for val in onehot_results.matrix[i] %}
+                      <td>{{ val }}</td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </table>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Token Counter Tab -->
+      <div class="tab-pane fade {% if active_tab == 'tokens' %}show active{% endif %}" id="tokens" role="tabpanel">
+        <div class="card">
+          <h3>Token Length Checker</h3>
+          <form method="post" action="/tokens">
+            <div class="mb-3">
+              <label class="form-label">Enter Paragraph:</label>
+              <textarea class="form-control" name="paragraph" rows="4" required></textarea>
+            </div>
+            <button class="btn btn-info" type="submit">Count Tokens</button>
+          </form>
+
+          {% if token_results %}
+            <hr>
+            <h5>Token Count: {{ token_results.count }}</h5>
+            <p>{{ token_results.tokens|join(', ') }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

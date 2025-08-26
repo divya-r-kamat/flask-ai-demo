@@ -2,7 +2,7 @@ import os
 import uuid
 import re
 import csv
-from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash
+from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash, get_flashed_messages
 from werkzeug.utils import secure_filename
 import numpy as np
 import cv2
@@ -38,18 +38,21 @@ def to_uint8(x):
 # --- routes ---
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # default empty results; active_tab can be passed via query param or will default to 'filter'
+    active_tab = request.args.get("tab", "filter")
+    return render_template("index.html", active_tab=active_tab)
 
-@app.route("/convolve", methods=["POST"])
-def convolve():
-    file = request.files.get("image")
+# ---------------- Image Filter (convolution + gradients) ----------------
+@app.route("/filter", methods=["POST"])
+def filter_image():
+    file = request.files.get("file")
     kernel_text = request.form.get("kernel", "").strip()
     if not file or file.filename == "":
         flash("No image provided")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="filter"))
     if not allowed_file(file.filename):
         flash("Unsupported file type")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="filter"))
 
     # parse kernel (expects 9 numbers)
     try:
@@ -60,7 +63,7 @@ def convolve():
         kernel = kernel.reshape((3, 3))
     except Exception as e:
         flash(f"Invalid kernel: {e}")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="filter"))
 
     uid = uuid.uuid4().hex
     fname = uid + "_" + secure_filename(file.filename)
@@ -70,7 +73,7 @@ def convolve():
     img = cv2.imread(in_path, cv2.IMREAD_COLOR)
     if img is None:
         flash("Failed to read image")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="filter"))
 
     filtered = cv2.filter2D(img, -1, kernel)
 
@@ -106,24 +109,27 @@ def convolve():
     }
 
     images = [os.path.basename(p) for p in [out_orig, out_filtered, out_gx, out_gy, out_gmag]]
-    return render_template("result.html", title="Convolution & Gradients", images=images, params=params)
+    filter_results = {"images": images, "params": params}
+    return render_template("index.html", active_tab="filter", filter_results=filter_results)
 
-
+# ---------------- Mean Images ----------------
 @app.route("/mean", methods=["POST"])
 def mean_images():
-    files = request.files.getlist("images")
+    files = request.files.getlist("files")
     files = [f for f in files if f and f.filename != "" and allowed_file(f.filename)]
     if not files:
         flash("No valid image files uploaded")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="mean"))
 
     uid = uuid.uuid4().hex
     read_images = []
     sizes = []
+    saved_inputs = []
     for i, f in enumerate(files):
         fname = f"{uid}_{i}_" + secure_filename(f.filename)
         fp = os.path.join(app.config["UPLOAD_FOLDER"], fname)
         f.save(fp)
+        saved_inputs.append(os.path.basename(fp))
         img = cv2.imread(fp, cv2.IMREAD_COLOR)
         if img is None:
             continue
@@ -132,7 +138,7 @@ def mean_images():
 
     if not read_images:
         flash("Couldn't read any images after upload")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="mean"))
 
     min_w = min(w for w, h in sizes)
     min_h = min(h for w, h in sizes)
@@ -148,25 +154,25 @@ def mean_images():
         b = cv2.addWeighted(im, 0.5, mean_img, 0.5, 0)
         bp = os.path.join(app.config["RESULT_FOLDER"], f"{uid}_blend_{idx}.png")
         cv2.imwrite(bp, b)
-        blended.append(bp)
+        blended.append(os.path.basename(bp))
 
-    images = [os.path.basename(mean_path)] + [os.path.basename(p) for p in blended]
+    images = [os.path.basename(mean_path)] + blended
     params = {
         "num_images": len(resized),
         "mean_shape": f"{min_w}x{min_h}x{resized[0].shape[2]}",
         "pixels_processed": min_w * min_h * resized[0].shape[2] * len(resized),
     }
-    return render_template("result.html", title="Mean Image", images=images, params=params)
+    mean_results = {"images": images, "params": params, "inputs": saved_inputs}
+    return render_template("index.html", active_tab="mean", mean_results=mean_results)
 
-
+# ---------------- One-hot ----------------
 @app.route("/onehot", methods=["POST"])
 def onehot():
     text = request.form.get("words", "").strip()
     if not text:
         flash("Please enter words (space/comma separated)")
-        return redirect(url_for("index"))
+        return redirect(url_for("index", tab="onehot"))
     tokens = [t for t in re.split(r"[\s,]+", text) if t != ""]
-    # preserve order, unique vocab
     vocab = list(dict.fromkeys(tokens))
     matrix = []
     for t in tokens:
@@ -182,26 +188,26 @@ def onehot():
             writer.writerow([tok] + row)
 
     params = {"vocab_size": len(vocab), "tokens_count": len(tokens)}
-    return render_template("result.html", title="One-hot", file_download=os.path.basename(csv_path),
-                           vocab=vocab, matrix=matrix, tokens=tokens, params=params)
+    onehot_results = {"vocab": vocab, "matrix": matrix, "tokens": tokens, "csv": os.path.basename(csv_path), "params": params}
+    return render_template("index.html", active_tab="onehot", onehot_results=onehot_results)
 
-
+# ---------------- Token Count ----------------
 @app.route("/tokens", methods=["POST"])
 def tokens():
     text = request.form.get("paragraph", "").strip()
-    tokens = text.split()
-    count = len(tokens)
-    return render_template("result.html", title="Token Count", token_count=count, token_list=tokens)
+    tokens_list = text.split()
+    count = len(tokens_list)
+    token_results = {"count": count, "tokens": tokens_list}
+    return render_template("index.html", active_tab="tokens", token_results=token_results)
 
-
+# ---------------- Static results ----------------
 @app.route("/results/<path:filename>")
 def send_result(filename):
     return send_from_directory(app.config["RESULT_FOLDER"], filename)
 
-
-# ASGI adapter so you can run this with uvicorn:
+# ASGI adapter so you can run this with uvicorn if you want:
 asgi_app = WsgiToAsgi(app)
 
 if __name__ == "__main__":
     # dev friendly
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
