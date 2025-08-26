@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Flask AI Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 950px; margin: 24px auto; padding: 12px; }
+    section { border: 1px solid #ddd; padding: 12px; margin-bottom: 14px; border-radius: 8px; }
+    textarea { width: 100%; }
+    input[type="file"] { display:block; margin-top:6px; margin-bottom:8px; }
+    button { padding:6px 12px; }
+  </style>
+</head>
+<body>
+  <h1>Simple Creative AI Demo (Flask)</h1>
+  <p>Pick a feature below — upload images / enter kernel / text and click the button.</p>
+
+  <section>
+    <h2>Image Filter Demo — custom 3×3 kernel</h2>
+    <form action="/convolve" method="post" enctype="multipart/form-data">
+      <label>Image: <input type="file" name="image" accept="image/*" required></label>
+      <label>3×3 kernel (9 numbers, space/comma separated):</label>
+      <textarea name="kernel" rows="2">0 -1 0 -1 5 -1 0 -1 0</textarea>
+      <p><small>Example: sharpen kernel above.</small></p>
+      <button type="submit">Apply Kernel & show gradients</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Upload 4–5 images → mean image and blended results</h2>
+    <form action="/mean" method="post" enctype="multipart/form-data">
+      <label>Select multiple images (up to 5): <input type="file" name="images" accept="image/*" multiple required></label>
+      <p><small>All images will be resized to the smallest width/height among uploaded images before averaging.</small></p>
+      <button type="submit">Compute Mean & Blends</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Words → One-hot</h2>
+    <form action="/onehot" method="post">
+      <textarea name="words" rows="3" placeholder="enter words separated by spaces or commas">hello world demo test</textarea><br>
+      <button type="submit">Make One-hot & download CSV</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Token length checker</h2>
+    <form action="/tokens" method="post">
+      <textarea name="paragraph" rows="4" placeholder="Paste paragraph here..."></textarea><br>
+      <button type="submit">Count tokens (split by spaces)</button>
+    </form>
+  </section>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ title or "Results" }}</title>
+  <style>body{font-family:Arial;max-width:900px;margin:20px auto;padding:12px} img{max-width:420px;border:1px solid #ddd;padding:6px}</style>
+</head>
+<body>
+  <h1>{{ title or "Results" }}</h1>
+
+  {% if params %}
+    <h3>Summary</h3>
+    <ul>
+      {% for k,v in params.items() %}
+        <li><strong>{{ k }}:</strong> {{ v }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if images %}
+    <h3>Images</h3>
+    {% for img in images %}
+      <div style="margin-bottom:12px;">
+        <img src="{{ url_for('send_result', filename=img) }}" alt="{{ img }}"><br>
+        <a href="{{ url_for('send_result', filename=img) }}" download>Download</a>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if file_download %}
+    <h3>Download</h3>
+    <a href="{{ url_for('send_result', filename=file_download) }}" download>{{ file_download }}</a>
+  {% endif %}
+
+  {% if vocab %}
+    <h3>Vocabulary ({{ vocab|length }})</h3>
+    <p>{{ vocab|join(', ') }}</p>
+
+    <h4>One-hot matrix</h4>
+    <table border="1" cellpadding="6" cellspacing="0">
+      <tr><th>token</th>{% for v in vocab %}<th>{{ v }}</th>{% endfor %}</tr>
+      {% for i in range(tokens|length) %}
+        <tr>
+          <td>{{ tokens[i] }}</td>
+          {% for val in matrix[i] %}
+            <td>{{ val }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </table>
+  {% endif %}
+
+  {% if token_count is defined %}
+    <h3>Token Count: {{ token_count }}</h3>
+    <p>{{ token_list|join(', ') }}</p>
+  {% endif %}
+
+  <p><a href="{{ url_for('index') }}">Back</a></p>
+</body>
+</html>
